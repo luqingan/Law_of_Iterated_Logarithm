@@ -11,7 +11,7 @@ library(gridExtra)
 library(shinycssloaders)
 library(grDevices)
 library(devtools)  
-#install_github("ropensci/plotly")
+
 ui <-  shinyUI(navbarPage("Law of Iterated Logarithm",
                           tabPanel("Descriptions", fluidPage(
                             uiOutput('descriptions')
@@ -514,7 +514,7 @@ Both of them oscillate when the sample size is small.
          breaks = seq(min(data$sn), max(data$sn),
                       length.out = 10))
   })
-# 
+
   output$plot4_txt=renderPrint({
     if (input$go==T){
       data = sn_last_n()
@@ -568,7 +568,7 @@ The proportion oscillate at small sample size and become more stable as sample s
          cex.sub=2,col='blue',
          breaks=30)
    })
-# 
+
   output$first_time_txt=renderPrint({
     if (input$go==T){
       max=maxtime()
