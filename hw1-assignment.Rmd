@@ -1,0 +1,363 @@
+---
+title: "Homework 1: Motor vehicle traffic fatalities"
+output: html_document
+---
+
+#### Preface 
+
+* **This homework is due Friday September 28, 2016 at 11:59 PM**. 
+* When you have completed the assignment, knit the R Markdown, commit your changes and push to GitHub.
+* If you do not include axis labels and plot titles, then points will be deducted.
+* If you do not include prose/text after the sections titled "Add a summary of your findings here", then points will be deducted. 
+* As as reminder, you can use up to two late days on this assignment without any penalty (see [Syllabus](https://jhu-advdatasci.github.io/2018/syllabus.html) on course website for more details on Late Day Policy).
+* You are welcome and encouraged to discuss homework problems with others in order to better understand it, but the work you turn in must be your own. You must write your own code, data analyses, and communicate and explain the results in your own words and with your own visualizations. **All students turning in plagiarized solutions will be reported to Office of Academic Integrity, and will fail the assignment**.
+
+## Motivation 
+
+Your parents retired a few years ago and they are considering 
+relocating into a retirement home. Currently, their top two
+choices for states to move to are Florida or California. 
+While they are excited to live in some place new, they are
+worried about driving in their old age considering the motor 
+vehicle traffic fatalities in Florida and California. 
+
+![](https://www.psblaw.com/wp-content/uploads/2011/06/Los_angeles_car_accident_statistics.jpg)
+
+You want to recommend to your parents which state might be 
+better or maybe even recommend a different state based on 
+other preferences they may have, such as access to mass 
+transit, weather, hiking, etc. You did some research and found 
+the Fatality Analysis Reporting System (FARS) of the 
+National Highway Traffic Safety Administration (NHTSA). You
+[read](https://www.nhtsa.gov/research-data/fatality-analysis-reporting-system-fars)
+that "FARS is a nationwide census providing NHTSA, Congress 
+and the American public yearly data regarding fatal injuries
+suffered in motor vehicle traffic crashes". You decide to 
+explore the dataset and other state-level features to be 
+able to recommend a state for your parents to move to. 
+
+Some datasets that you will find useful are: 
+
+* [2015 FARS data](ftp://ftp.nhtsa.dot.gov/fars/2015/National/FARS2015NationalDBF.zip) and [2015 FARS user guide](http://www.nber.org/fars/ftp.nhtsa.dot.gov/fars/FARS-DOC/Analytical%20User%20Guide/USERGUIDE-2015.pdf)
+* [Geographic Locator Codes (GLCs) for the U.S. and U.S. Territories](https://www.gsa.gov/reference/geographic-locator-codes/glcs-for-the-us-and-us-territories)
+* [US Census population totals by state for 2015](https://www.census.gov/data/tables/2017/demo/popest/state-total.html#par_textimage)
+* [Life Expectancy at Birth (in years)](https://www.kff.org/other/state-indicator/life-expectancy)
+
+
+## Problem 1
+
+### Problem 1.1
+
+Read in the `accident.dbf` dataset into R from the 2015 FARS dataset and create a data frame called `acc`. 
+
+**Hint**: You might find the 
+[foreign](https://cran.r-project.org/web/packages/foreign/index.html)
+R package useful here. 
+
+```{r warning=FALSE, message=FALSE}
+library("foreign")
+acc = read.dbf("/Users/alice/Documents/yr2term1/data science/homework/2018-hw1-luqingan/FARS2015NationalDBF/accident.dbf")
+```
+
+### Problem 1.2 
+
+You see first colum in the `acc` dataset (`STATE`) contains 
+the Geographic Locator Code (GLC) for each US state. Read 
+in the GLCs dataset for the US and US territories. Create
+a data frame called `states` that contains a state name
+and state GLC code in each row. 
+
+```{r warning=FALSE, message=FALSE}
+library(openxlsx)
+library(tidyverse)
+state = read.xlsx('/Users/alice/Documents/yr2term1/data science/homework/2018-hw1-luqingan/FRPP GLC United States.xlsx')
+colnames(state) = state[1,]
+state = state[-1,]
+
+states = state[,2:3]
+states = states[which(!duplicated(states)),]
+states = states[-2,]
+```
+
+
+### Problem 1.3 
+
+Add the state abbreviation and region to the `states`
+data frame using the 
+[state dataset](http://stat.ethz.ch/R-manual/R-devel/library/datasets/html/state.html) 
+in R.
+
+```{r warning=FALSE, message=FALSE}
+library(datasets)
+data(state)
+state.abb <- c(state.abb, "DC")
+state.region <- as.factor(c(as.character(state.region), "South"))
+state.name <- c(state.name, "District of Columbia")
+state.name <- toupper(state.name)
+
+states$abb = state.abb[match(states$"State Name",state.name)]
+states$region <- state.region[match(states$"State Name",state.name)]
+```
+
+### Problem 1.4
+
+Add the state name, abbreviation and region 
+to the `acc` dataset. 
+
+```{r warning=FALSE, message=FALSE}
+acc$'State Name' = states$'State Name'[match(acc[,1],states$`State Code`)]
+acc$'Abbreviation' = states$abb[match(acc[,1],states$`State Code`)]
+acc$'Region' = states$region[match(acc[,1],states$`State Code`)]
+```
+
+### Problem 1.5
+
+Add a column to the `acc` dataset containing 
+the 2015 population total for each state.
+
+
+```{r warning=FALSE, message=FALSE}
+popu = read_csv('/Users/alice/Documents/yr2term1/data science/homework/2018-hw1-luqingan/nst-est2017-alldata.csv')
+acc$'Population' = popu$POPESTIMATE2015[match(acc$'State Name',toupper(popu$NAME))]
+```
+
+
+
+## Problem 2
+
+Which states have the most motor vehicle fatalities? 
+
+### Problem 2.1
+
+```{r warning=FALSE, message=FALSE}
+fat = table(acc$Abbreviation)
+fat = data.frame(sort(fat,decreasing = T))
+colnames(fat)[1] = 'state'
+library(ggplot2)
+# Basic barplot
+p<-ggplot(data=fat, aes(x=state, y=Freq)) +
+  geom_bar(stat="identity",width=0.5)+ 
+  theme(axis.text.x = element_text(face="bold",hjust = 1,
+                           size=5),
+          plot.title = element_text(hjust = 0.5),
+          axis.text.y = element_text(face="bold",
+                           size=14))+
+  ggtitle("Plot of total number of fatalities by states") +
+  xlab("State Name") + ylab("Total number of fatalities")
+  
+p
+
+
+```
+
+Which states contain the most fatalities? Which states contain the least?
+
+
+#### Taxes has the most fatalities, and DC has the least. 
+
+
+### Problem 2.2 
+
+```{r warning=FALSE, message=FALSE}
+library(zoo)
+library(plotly)
+library(tidyverse)
+time = as.Date(ISOdate(acc$YEAR,acc$MONTH,acc$DAY))
+fat_mon = data.frame(table(acc$Abbreviation,acc$MONTH))
+fat_mon = fat_mon[which(fat_mon$Var1%in%fat$state[1:3]),]
+Month = as.character(as.yearmon(2015 + seq(0, 11)/12))
+ggplot(data = fat_mon,aes(y = Freq, x = Var2, group = Var1,color = Var1)) + 
+  geom_line()+
+  scale_x_discrete(labels= Month)+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1, size=13))+
+        labs(title = "Plot of Fatalities Across Month in 2015", x = "Month", y = "Fatality")
+
+time = as.Date(ISOdate(acc$YEAR,acc$MONTH,acc$DAY))
+fat_date = data.frame(table(acc$Abbreviation,time))
+fat_date = fat_date[which(fat_date$Var1%in%fat$state[1:3]),]
+colnames(fat_date)[1] = 'State'
+ggplot(data = fat_date,aes(y = Freq, x = time, group = State,color = State)) + 
+  geom_line()+
+  scale_x_discrete(labels= Month)+
+  theme(plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1, size=13))+
+    facet_wrap(~State)+
+    labs(title = "Plot of Fatalities Across Date in 2015", x = "Month", y = "Fatality")
+```
+
+#### All the three states with highest fatalities have dramatic increase in fatalities at March, October and December. And they are less problematic at February and August. 
+In March, 
+
+#### In my opinion, people travel more in spring break (March), fall break (October) and winter break (December), so there is higher potential to have car accident because people drive more. In February and August, people might tend to stay more at home due to extreme weather (too cold or too hot). 
+
+#### There are also states difference. In May, fatality decreased in CA but increased in FL and TX, but in April, CA had relatively high fatality but the fatalities of FL and TX decreased. I think ... 
+
+
+## Problem 3
+
+### Problem 3.1
+
+```{r warning=FALSE, message=FALSE}
+states$'Population' = popu$POPESTIMATE2015[match(states$'State Name',toupper(popu$NAME))]
+states$'fatality' = fat$Freq[match(states$abb,fat$state)]
+
+states %>%
+  ggplot(aes(x = Population, y = fatality, 
+             color = region)) + 
+  geom_point() + 
+  xlab("Population") + 
+  ylab("Fatality") + 
+  ggtitle("Plot of Fatality to Population") +
+  theme(plot.title = element_text(hjust = 0.5))+
+  geom_smooth(method = "lm", col = "red") + 
+  geom_text(aes(label=abb), nudge_x = 150) 
+
+states %>%
+  ggplot(aes(x = Population, y = fatality, 
+             color = region)) + 
+  geom_point() + 
+  xlab("Population") + 
+  ylab("Fatality") + 
+  theme(plot.title = element_text(hjust = 0.5))+
+  ggtitle("Plot of Fatality to Population by Region") +
+  geom_smooth(method = "lm", col = "red") + 
+  geom_text(aes(label=abb), nudge_x = 150) + 
+  facet_wrap(~region)
+
+```
+
+#### There is a positive association between population and fatalities, for all regions. States with larger population would have higher fatality. Southern states have the greatest increase in fatality with one unit increase in population, and northern central states have the smallest increase in fatality with one unit increase in population among all the regions. 
+
+
+### Problem 3.2 
+
+Instead of total number of fatalities, calculate 
+the fatality rate (total number of fatalities 
+divided by population size). How does the 
+fatality rate change across regions and states? 
+Create a data visualization (plot) to explore 
+these questions and summarize your results. 
+
+
+```{r warning=FALSE, message=FALSE}
+states$rate = states$fatality/states$Population
+
+g32 = ggplot(data=states, aes(x=abb, y=rate,color=region)) +
+  geom_bar(stat="identity",width=0.5)+ 
+  theme(axis.text.x = element_text(face="bold",hjust = 1,
+                           size=5),
+        plot.title = element_text(hjust = 0.5),
+
+          axis.text.y = element_text(face="bold",
+                           size=14))+
+  ggtitle("Plot of rate of fatalities by states") +
+  xlab("State Name") + ylab("Rate of fatalities")
+ 
+ g32
+ g32+   facet_wrap(~region)
+
+
+states$'State Name'[which.max(states$rate)]
+states$'State Name'[which.min(states$rate)]
+
+```
+
+
+Which states have the highest fatality rate? 
+
+Which states have the lowest fatlity rate? 
+
+#### WYOMING has the highest fatality rate and DC has the lowest fatality rate. Fatality rates are different among all the states, and the fatality rates are higher in southern and western region, comparing to those of north central and northeast regions. 
+
+
+### Problem 3.3 
+
+Is rate of traffic fatalities related to life 
+expectancy? Create a data visualization 
+(plot) to explore this question and summarize 
+your results. 
+
+**Hint**: Color the states by regions and 
+add the state abbreviations on top of your plot. 
+
+
+```{r warning=FALSE, message=FALSE}
+life <- read_csv("/Users/alice/Documents/yr2term1/data science/homework/2018-hw1-luqingan/raw_data.csv", 
+                     skip = 2, col_names = TRUE)
+states$life = life$`Life Expectancy at Birth (years)`[match(states$`State Name`,toupper(life$Location))]
+
+g = states %>%
+  ggplot(aes(x = rate, y = life, 
+             color = region)) + 
+  geom_point() + 
+  ggtitle("Plot of Rate of Fatality to Life Expectancy") +
+
+  xlab("Rate of Fatalities") + 
+  ylab("Life Expectancy") + 
+  geom_text(aes(label=abb)) +
+  geom_smooth(method = "lm", col = "red") 
+g
+g+ facet_wrap(~region)
+```
+
+####  The rate of traffic fatalities is negatively related to life expectancy. States with larger rate of traffic fatalities would have lower life expectancy. The changes of life expectancy to one unit increase in population are similar among all the regions. 
+
+
+
+## Problem 4 
+
+####  To estimate how much a state spends on medicare, we calculate the rate of spending per capital with the dataset 'Health Care Expenditures by State of Residence (in millions)', by dividing spending on medicare over population in each state. 
+
+####  Using data of Average Annual Temperature for Each US State, which is based on data collected by weather stations during the years 1971 to 2000 and made available by the NOAA National Climatic Data Center of the United States. (https://www.currentresults.com/Weather/US/average-annual-state-temperatures.php). Since my parent prefer warm weather, I kept only states whose average weather is above 75% quantile, which is 58.65°F. After filtering, I keep only 13 states. 
+```{r warning=FALSE, message=FALSE}
+spending <- read_csv("/Users/alice/Documents/yr2term1/data science/homework/2018-hw1-luqingan/spend.csv", 
+                     skip = 2, col_names = TRUE)
+states$spending = spending$`Total Health Spending`[match(states$`State Name`,toupper(spending$Location))]
+states$r_spending = as.numeric(gsub('\\$|', '', states$spending))/states$Population
+
+### weather  https://www.currentresults.com/Weather/US/average-annual-state-temperatures.php
+weather = read.xlsx('/Users/alice/Documents/yr2term1/data science/homework/2018-hw1-luqingan/weather.xlsx')
+## keep state with 
+bound = quantile(weather$`Avg.°F`,0.75)
+bound
+weather_state =  weather[which(weather$`Avg.°F`>=bound),]
+```
+
+
+####  To gain information of cosmopolitan cities, I explored top 100 big cities in US from the dataset 'US City Populations 2018' (http://worldpopulationreview.com/us-cities/). The top 100 big cities are distributed among By counting number of top 100 big cities in 34 states. Finding overlaps of states filtered by weather and states filtered by cities, we keep only 9 states: Arizona, California, Florida, Georgia, Hawaii, Louisiana, North Carolina, Oklahoma and Texas. 
+
+```{r warning=FALSE, message=FALSE}
+city = read.csv('/Users/alice/Documents/yr2term1/data science/homework/2018-hw1-luqingan/city.csv')
+city_state = table(city$State)
+
+city_state_k = city_state[na.omit(match(weather_state[,1],names(city_state)))]
+weather_state_k = weather_state[-which(is.na(match(weather_state[,1],names(city_state)))),]
+r_spend = states[match(toupper(names(city_state_k)),states$`State Name`),c(1,10)]
+r_fata = states[match(toupper(names(city_state_k)),states$`State Name`),c(1,7)]
+```
+
+####  To determine which state to move, I ranked the average weather, big city numbers, rate of spending and fatality rate. Setting weight of each criteria to be 0.25, we calculated the final living preference scores for each of the nine states. Therefore, by taking all the concerns into consideration, I would recommend my parents to move to Florida, which has the highest score 6.75. 
+
+```{r warning=FALSE, message=FALSE}
+rank = data.frame(city = rank(city_state_k),weather = rank(weather_state_k[,2]),rate_spending = rank(r_spend[,2]),rate_fata = rank(-r_fata[,2]))
+weight = c(0.25,0.25,0.25,0.25)
+score = data.frame(state = rownames(rank), score = rowSums(weight*rank))
+ggplot(data=score, aes(x=state, y=score)) +
+  geom_bar(stat="identity",width=0.5)+ 
+  geom_text(aes(label=score), vjust=-0.3, size=3.5)+
+
+  theme(axis.text.x = element_text(hjust = 0.8,
+                           size=8),
+          plot.title = element_text(hjust = 0.5),
+          axis.text.y = element_text(face="bold",
+                           size=14))+
+  ggtitle("Plot of Living Preference Scores by Selected States") +
+  xlab("State Name") + ylab("Scores")
+
+```
+
+
+
+####  In brief, Arizona, California, Florida, Georgia, Hawaii, Louisiana, North Carolina, Oklahoma and Texas satisfy the requirement of warm weather and access to several large cosmopolitan cities. Among the 9 states, Hawaii has the lowest rate of fatality from car crash and Florida has the highest spending on healthcare per capital. By assigning weights to each of the concerns, we find the optimal state for my parents' retirement is Florida. 
+
